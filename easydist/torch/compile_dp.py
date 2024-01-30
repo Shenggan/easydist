@@ -62,13 +62,14 @@ def transform_ddp(traced_graph: torch.fx.GraphModule) -> torch.fx.GraphModule:
             grad_nodes = node.args[1]
             synced_node = []
             for grad_node in grad_nodes:
-                with traced_graph.graph.inserting_before(node):
+                with traced_graph.graph.inserting_after(grad_node):
                     ranks = device_mesh.mesh.flatten().tolist()
                     reduceOp = "avg"
                     all_reduce_start_node = traced_graph.graph.call_function(all_reduce_start,
                                                                              args=(grad_node,
                                                                                    reduceOp,
                                                                                    ranks))
+                with traced_graph.graph.inserting_after(all_reduce_start_node):
                     all_reduce_end_node = traced_graph.graph.call_function(
                         all_reduce_end, args=(all_reduce_start_node, reduceOp, ranks))
                     synced_node.append(all_reduce_end_node)
@@ -150,13 +151,15 @@ def transform_fsdp(traced_graph: torch.fx.GraphModule, shard_param: bool) -> tor
             grad_nodes = node.args[1]
             synced_nodes = []
             for grad_node in grad_nodes:
-                with traced_graph.graph.inserting_before(node):
+                with traced_graph.graph.inserting_after(grad_node):
                     reduceOp = "avg"
                     scatter_dim = 0
                     flatten_node = traced_graph.graph.call_function(torch.ops.aten.flatten,
                                                                     args=(grad_node, ))
+                with traced_graph.graph.inserting_after(flatten_node):
                     reduce_scatter_start_node = traced_graph.graph.call_function(
                         reduce_scatter_start, args=(flatten_node, reduceOp, scatter_dim, ranks))
+                with traced_graph.graph.inserting_after(reduce_scatter_start_node):
                     reduce_scatter_end_node = traced_graph.graph.call_function(
                         reduce_scatter_end,
                         args=(reduce_scatter_start_node, reduceOp, scatter_dim, ranks))

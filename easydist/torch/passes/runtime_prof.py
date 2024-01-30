@@ -70,7 +70,7 @@ def get_tiled_inputs(materialized_inputs, sharding_ann, tile_dim, num_tiles):
             if tile_dim in input_sharding_ann:
                 input_tile_dim = input_sharding_ann.index(tile_dim)
                 tiled_input = torch.chunk(input_, chunks=num_tiles, dim=input_tile_dim)[0]
-                tiled_inputs.append(tiled_input)
+                tiled_inputs.append(tiled_input.contiguous())
             else:
                 tiled_inputs.append(input_)
             inputs_tensor_index += 1

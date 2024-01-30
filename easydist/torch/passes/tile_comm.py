@@ -101,7 +101,7 @@ def forward_tiled_node(tiled_node: TiledNode, user: torch.fx.Node) -> TiledNode:
 
 def get_arg_tile_axis(node: torch.fx.Node, tile_axis, arg_index) -> int:
 
-    if node.target in [all_gather_start, all_reduce_start, all_to_all_start]:
+    if node.target in [all_gather_start, all_reduce_start, all_to_all_start, all_reduce_end]:
         return tile_axis
 
     for shard_dim_id, combine_func in node.ed_info.spmd_annotation['combination_ann'].items():

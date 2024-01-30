@@ -40,7 +40,7 @@ from easydist.autoflow.solver import AutoFlowSolver
 from easydist.torch.bridge import (get_torch_sharding_strategy, to_torch_spmd, torch2meta_graph)
 from easydist.torch.decomp_utils import EASYDIST_DECOMP_TABLE
 from easydist.torch.init_helper import (SetParaInitHelper, init_contiguous_buf, materialize_zero)
-from easydist.torch.passes import (eliminate_detach, fix_addmm_bias, fix_convoluation_bias,
+from easydist.torch.passes import (eliminate_detach, fix_addmm_bias, fix_bn_bwd,
                                    tile_comm, runtime_prof, fix_embedding, fix_meta_device,
                                    sharding_transform, sharding_transform_dtensor,
                                    AllocatorProfiler, ModuleProfilingInfo)
@@ -310,6 +310,7 @@ def _compile_auto(func, tracing_mode, init_helper, input_signature, args, kwargs
             sharded_graph = tile_comm(sharded_graph)
 
     sharded_graph = fix_embedding(sharded_graph, recover=True)
+    sharded_graph = fix_bn_bwd(sharded_graph)
 
     if not mdconfig.use_dtensor:
         if mdconfig.comm_optimization is True:
