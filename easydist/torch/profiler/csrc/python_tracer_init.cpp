@@ -41,6 +41,8 @@ PYBIND11_MODULE(profiling_allocator, m) {
     m.def("_get_allocator_profiling_info", get_allocator_profiling_info);
     m.def("_save_back_allocator", save_back_allocator);
 
+    m.def("init_fn", init_fn);
+
     py::enum_<AllocatorMode>(m, "AllocatorMode")
         .value("PROFILE", AllocatorMode::PROFILE)
         .value("RUNTIME", AllocatorMode::RUNTIME);

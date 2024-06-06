@@ -14,6 +14,7 @@
 
 import logging
 import os
+import sys
 import pickle
 import time
 import threading
@@ -60,10 +61,9 @@ from easydist.torch.utils import (_enable_compile, _rematerialize_optimizer,
 from easydist.utils import rgetattr, rsetattr
 from easydist.utils.testing import TorchMockDeviceMesh
 import easydist.torch.profiler.stream_tracer as ed_stream_tracer
-from profiling_allocator import _set_allocator_mode, _set_customized_flag, AllocatorMode
-# for pickle dump opt_strategy
-import sys
+from easydist.torch.meta_allocator import profiling_allocator
 
+# for pickle dump opt_strategy
 sys.setrecursionlimit(100000)
 
 logger = logging.getLogger(__name__)
@@ -200,12 +200,12 @@ def fetch_mem_sol():
 
 @torch.fx.has_side_effect
 def start_customized_allocator():
-    _set_customized_flag(True)
+    profiling_allocator._set_customized_flag(True)
     return None
 
 @torch.fx.has_side_effect
 def stop_customized_allocator():
-    _set_customized_flag(False)
+    profiling_allocator._set_customized_flag(False)
     return None
 
 def insert_customized_allocator_flag(
@@ -254,7 +254,7 @@ def memory_opt(gm: torch.fx.GraphModule):
         logging.info("profiling fx module's memory...")
 
     # setting allocator to profiling mode
-    _set_allocator_mode(AllocatorMode.PROFILE)
+    profiling_allocator._set_allocator_mode(profiling_allocator.AllocatorMode.PROFILE)
 
     # save all profiling information in this dict
     profiling_info = ModuleProfilingInfo(rank)
@@ -429,9 +429,10 @@ def _compile_auto(func,
     traced_graph = preprocess_traced_graph(traced_graph)
     traced_graph.recompile()
 
-    save_graphviz_dot(traced_graph, 'traced_graph')
-
     if mdconfig.dump_fx_graph:
+
+        save_graphviz_dot(traced_graph, 'traced_graph')
+
         print(f"node num in traced graph: {len(traced_graph.graph.nodes)}")
         drawer = FxGraphDrawer(traced_graph, "traced_fx", ignore_getattr=True)
         dot_graphs = drawer.get_all_dot_graphs()
@@ -485,8 +486,10 @@ def _compile_auto(func,
             sharded_gm = runtime_prof(sharded_gm, tiling_prof=True)
             sharded_gm = tile_comm(sharded_gm)
 
-    save_graphviz_dot(sharded_gm, f'sharded_graph_raw_{rank}')
     sharded_gm = fix_embedding(sharded_gm, recover=True)
+
+    if mdconfig.dump_fx_graph:
+        save_graphviz_dot(sharded_gm, f'sharded_graph_raw_{rank}')
 
     if not mdconfig.use_dtensor:
         if schedule_cls is None and mdconfig.comm_optimization is True:
@@ -653,7 +656,7 @@ def _compile_auto(func,
 
             # run the sharded_gm
             if mdconfig.enable_memory_opt:
-                _set_allocator_mode(AllocatorMode.RUNTIME)
+                profiling_allocator._set_allocator_mode(profiling_allocator.AllocatorMode.RUNTIME)
                 params, buffers, named_states, grads, sharded_out = graph(
                     params, buffers, named_states, args, kwargs)
             else:
@@ -665,10 +668,6 @@ def _compile_auto(func,
 
             # out from DTensor to Tensor
             local_out = pytree.tree_map(dtensor_to_tensor, sharded_out)
-            if isinstance(local_out, torch.Tensor):
-                print(f"local_out: {local_out}")
-                #meta_info = extract_tensor_meta_info(local_out)
-                #print(meta_info)
 
             return local_out
 
